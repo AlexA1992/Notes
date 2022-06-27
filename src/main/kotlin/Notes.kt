@@ -1,246 +1,182 @@
-import kotlin.concurrent.thread
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
-class Notes(
-    val id: Int, val userId: Int, val date: String, var text: String
-)
+data class Notes(
+    val id: Int,
+    val userId: Int,
+    val date: String = LocalDateTime.now()
+        .format(DateTimeFormatter.ofPattern("MMM dd yyyy, hh:mm:ss a")).toString(),
+    var text: String,
+    var deleted: Boolean = false,
+) : CrudService<Notes> {
 
-//заметки
-val noteList = mutableListOf<Notes>()
-fun add(note: Notes) {
-    noteList.add(note)
-}
-
-// распечатать все заметки
-fun get(noteList: MutableList<Notes>) {
-    for (notes in noteList) {
-        println(notes.text)
+    override fun add(entity: Notes, list: List<Notes>): List<Notes> {
+        val newList = list.toMutableList().plus(entity).toList()
+        NotesList.allNotes = newList
+        return NotesList.allNotes
     }
-}
 
-// распечатать заметку по ее ID
-fun getById(noteList: MutableList<Notes>, noteId: Int) {
-    var replyGetById: Boolean = false
-    for (note in noteList) {
-        if (note.id == noteId) {
-            println(note.text + " got by Id")
-            println("----------------------")
-            replyGetById = true
-            break
+    override fun delete(id: Int, list: List<Notes>): List<Notes> {
+        for (notes in list) {
+            if (notes.id == id) {
+                if (!notes.deleted) {
+                    notes.deleted = true
+                }
+                break
+            }
         }
+        return list
     }
-    if (replyGetById == false) {
-        println("no by Id")
-        throw Exception("нет такой заметки")
-    }
-}
 
-//вставляем комменты
-val commentsList = mutableListOf<Comment>()
-fun createComment(comment: Comment, noteList: MutableList<Notes>, commentsList: MutableList<Comment>) {
-    for (thisNote in noteList) {
-        if (thisNote.id == comment.noteId) {
-            commentsList.add(comment)
-            break
+    override fun edit(entity: Notes, list: List<Notes>): List<Notes> {
+        for (notes in list) {
+            if (notes.id == entity.id) {
+                notes.text = entity.text
+                break
+            }
         }
+        return list
     }
-}
 
-// распечатать комменты
-fun printComments(commentsList: MutableList<Comment>) {
-    for (comment in commentsList) {
-        if (comment.deleted == false) {
-            println(comment.text)
+    override fun getById(id: Int, list: List<Notes>): Notes? {
+        var thisNote: Notes? = null
+        for (notes in list) {
+            if (notes.id == id) {
+                thisNote = notes
+            }
         }
-
+        return thisNote
     }
-}
 
-//удалить заметку
-fun deleteNote(note: Notes, noteList: MutableList<Notes>, commentsList: MutableList<Comment>) {
-    for (thisNote in noteList) {
-        if (thisNote.id == note.id && thisNote.userId == note.userId) {
-            noteList.remove(thisNote)
-            deleteCommentsOfDeletedNote(thisNote.id, commentsList)
-            break
+    override fun restore(id: Int, list: List<Notes>): List<Notes> {
+        for (notes in list) {
+            if (notes.id == id) {
+                if (notes.deleted) {
+                    notes.deleted = false
+                }
+                break
+            }
         }
+        return list
     }
 }
 
-//удаляем и комменты если заметка удалена
-fun deleteCommentsOfDeletedNote(noteId: Int, commentsList: MutableList<Comment>) {
-    val numbersIterator = commentsList.iterator()
-    while (numbersIterator.hasNext()) {
-        if (numbersIterator.next().noteId == noteId) {
-            numbersIterator.remove()
-        }
-    }
-}
-
-//удалить комменты к заметке без удаления заметки (то есть не показывать эти комменты просто)
-fun deleteCommentsByNote(theNoteId: Int, noteList: MutableList<Notes>, commentsList: MutableList<Comment>) {
-    //val commentsIterator = commentsList.iterator()
-    var replydeleteCommentsByNote = false
-    commentsList.forEach(){
-        if(it.noteId == theNoteId){
-            println(it.noteId)
-            it.deleted = true
-            replydeleteCommentsByNote = true
-        }
-    }
-    if (replydeleteCommentsByNote == false) {
-        throw Exception("нет комментов к этой заметке")
-    }
-}
-
-//удалить коммент (вернее перестать показывать)
-fun deleteComment(comment: Comment, commentsList: MutableList<Comment>) {
-    for (thiscomment in commentsList) {
-        if (thiscomment.id == comment.id) {
-            thiscomment.deleted = true
-            break
-        }
-    }
-}
-
-//редактим заметку 3
-fun edit(note: Notes, editedText: String, noteList: MutableList<Notes>): Boolean {
-    var reply: Boolean = false
-    for (thisNote in noteList) {
-        if (thisNote.id == note.id) {
-            thisNote.text = editedText
-            reply = true
-        }
-    }
-    if (reply == false) {
-        throw Exception("нет такой заметки уже")
-    }
-    return reply
-}
-
-//редактить коммент
-fun editComment(comment: Comment, newComment: String, commentsList: MutableList<Comment>) {
-    var replyEditComment: Boolean = false
-    for (theComment in commentsList) {
-        if (comment.id == theComment.id) {
-            theComment.text = newComment
-            replyEditComment = true
-        }
-        if (replyEditComment == false) {
-            throw Exception("нет такой заметки совсем")
-        }
-    }
-}
-
-//печатаем удаленные комменты
-fun deletedComments(commentsList: MutableList<Comment>) {
-    for (comment in commentsList) {
-        if (comment.deleted == true) {
-            println(comment.text)
-        }
-    }
+object NotesList {
+    var allNotes: List<Notes> = emptyList()
 }
 
 fun main() {
-    //делаем заметки
-    val note1 = Notes(1, 1, "01/02/2022", "do homework")
-    val note2 = Notes(5, 1, "02/02/2022", "do quickly")
-    val note3 = Notes(6, 1, "03/02/2022", "do very quickly")
-    val note4 = Notes(7, 2, "03/02/2022", "do ultra quickly")
-    val note5 = Notes(8, 1, "03/02/2022", "do immediately")
+    //создаем записи
+    val note1 = Notes(1, 2, text = "First note")
+    val note2 = Notes(2, 5, text = "Second note")
+    val note3 = Notes(3, 7, text = "Third note")
 
-    // добаляем их
-    add(note1)
-    add(note2)
-    add(note3)
-    add(note4)
-    add(note5)
-    get(noteList)
-    println("----------------------")
-    //делаем комменты к заметкам
-    val comment1 = Comment(1, 1, 1, "02/03/2002", "good comment", false)
-    val comment2 = Comment(2, 1, 3, "04/03/2002", "very good comment", false)
-    val comment3 = Comment(3, 5, 3, "05/03/2002", "bad comment", false)
-    val comment4 = Comment(4, 6, 3, "06/03/2002", "very bad comment", false)
-    val comment5 = Comment(5, 7, 3, "07/03/2002", "1 comment to noteId=7", false)
-    val comment6 = Comment(6, 7, 3, "08/03/2002", "2 comment to noteId=7", false)
+    //создаем комменты
+    val comment1 = Comment(1, 1, text = "First comment for 1 note")
+    val comment2 = Comment(2, 2, text = "First comment for 2 note")
+    val comment3 = Comment(3, 2, text = "Second comment for 2 note")
+    val comment4 = Comment(4, 3, text = "First comment for 3 note")
 
     //добавляем их
-    createComment(comment1, noteList, commentsList)
-    createComment(comment2, noteList, commentsList)
-    createComment(comment3, noteList, commentsList)
-    createComment(comment4, noteList, commentsList)
-    createComment(comment5, noteList, commentsList)
-    createComment(comment6, noteList, commentsList)
-    printComments(commentsList)
-    println("----------------------")
+    note1.add(note1, NotesList.allNotes)
+    note1.add(note2, NotesList.allNotes)
+    note1.add(note3, NotesList.allNotes)
+
+    println("После добавления заметок")
+    println(NotesList.allNotes)
 
 
-    // удаляем заметку 1 и комменты к ней
+    //добавляем их
+    comment1.add(comment1, CommentList.allComments)
+    comment1.add(comment2, CommentList.allComments)
+    comment1.add(comment3, CommentList.allComments)
+    comment1.add(comment4, CommentList.allComments)
+
+    println("После добавления комментов")
+    println(CommentList.allComments)
+
+    //edit note
+    note1.edit(Notes(1, 2, text = "New first note"), NotesList.allNotes)
+    println("После редактирования")
+    println(NotesList.allNotes)
+
+    //delete
+    note1.delete(1, NotesList.allNotes)
+    println("После удаления заметки распечатываются только те заметки, которые не удалены")
+    for (note in NotesList.allNotes) {
+        if (!note.deleted) {
+            println(note)
+        }
+    }
+
+    //getById
+    println("Получаем Note по ID")
+    println(note1.getById(2, NotesList.allNotes))
+
+    //restore
+    println("Восстанавливаем удаленную ID=1")
+    note1.restore(1, NotesList.allNotes)
+    println("После восстановления распечатываются те, которые не удалены")
+    for (note in NotesList.allNotes) {
+        if (!note.deleted) {
+            println(note)
+        }
+    }
+
+    //edit
+    comment1.edit(Comment(1, 2, text = "New first comment"), CommentList.allComments)
+    println("После редактирования")
+    println(CommentList.allComments)
+
+    //delete
+    comment1.delete(1, CommentList.allComments)
+    println("После удаления распечатываются только те, которые не удалены")
+    for (comment in CommentList.allComments) {
+        if (!comment.deleted) {
+            println(comment)
+        }
+    }
+    //getById
+    println("Получаем Note по ID")
+    println(comment1.getById(2, CommentList.allComments))
+
+    //restore
+    println("Восстанавливаем удаленную ID=1")
+    comment1.restore(1, CommentList.allComments)
+    println("После восстановления распечатываются только те, которые не удалены")
+    for (comment in NotesList.allNotes) {
+        if (!comment.deleted) {
+            println(comment)
+        }
+   }
+
+    println("Снова удаляем заметку с ID = 1")
+    note1.delete(1, NotesList.allNotes)
+    println(NotesList.allNotes)
+
+    //поскольку заметка c Id = 1 удалена, то удаляем комменты с noteId = 1
+    comment1.deleteCommentsIfNotesDeleted()
+
+    println("Распечатываем комменты после удаления тех комментов, у которых удалены заметки:" +
+            "заметка note1 - была удалена, соответственно comment1 будет удалена," +
+            "у нее войство deleted станет false")
+    for (comment in CommentList.allComments){
+        if(!comment.deleted){
+            println(comment)
+        }
+    }
+
+    //коммант 1 уже удален (помечен как удаленный) но юзер пытается его отредактировать. Выкидываем исключение
     try {
-        deleteNote(note1, noteList, commentsList)
-    } catch (e: Exception) {
+        comment1.edit(comment1, CommentList.allComments)
+    } catch (e: CommentNotFoundException) {
         println(e.message)
     }
-    println("----------------------")
-    get(noteList)
-    println("----------------------")
-    printComments(commentsList)
-    println("----------------------")
 
-    // удаляем коммент 3
+    //коммент с ID = 2  не удален, но юзер пытается его восстановить. Выкидываем исключение
     try {
-        deleteComment(comment3, commentsList)
-    } catch (e: Exception) {
+        comment1.restore(2, CommentList.allComments)
+    } catch (e: CommentNotDeletedException) {
         println(e.message)
-        println("----------------------")
     }
-    printComments(commentsList)
-    println("----------------------")
-
-    // редактим заметку 3
-    try {
-        val newText: String = "edited note"
-        edit(note3, newText, noteList)
-    } catch (e: Exception) {
-        println(e.message)
-        println("----------------------")
-    }
-    get(noteList)
-    println("----------------------")
-
-    //удаляем коммент
-    try {
-        val newComment: String = "edited comment"
-        editComment(comment4, newComment, commentsList)
-    } catch (e: Exception) {
-        println(e.message)
-        println("----------------------")
-    }
-    printComments(commentsList)
-    println("----------------------")
-
-    //распечатать по ID
-    try {
-        val theId: Int = 7
-        getById(noteList, theId)
-    } catch (e: Exception) {
-        println(e.message)
-        println("----------------------")
-    }
-    get(noteList)
-    println("----------------------")
-
-    // удаляем комменты к заметке 7  - их 2
-    try {
-        val theNoteId: Int = 7
-        deleteCommentsByNote(theNoteId, noteList, commentsList)
-    } catch (e: Exception) {
-        println(e.message)
-        println("----------------------")
-    }
-    printComments(commentsList)
-    println("----------------------")
-
-    println("++++++++++++++++++++")
-    deletedComments(commentsList)
 }
